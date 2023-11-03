@@ -1,5 +1,7 @@
 const { App } = require("@slack/bolt");
-const bigquery = require("./bigQuery");
+// const bigquery = require("./bigQuery");
+const { BigQuery } = require("@google-cloud/bigquery");
+const { project_id, client_email, private_key } = require("./constants");
 
 require("dotenv").config();
 
@@ -10,17 +12,17 @@ const app = new App({
 	appToken: process.env.SLACK_APP_TOKEN,
 });
 
-app.message("hello", async ({ message, say }) => {
-	try {
-		await say("Hey there");
-	} catch (error) {
-		console.log(error);
-	}
+const bigquery = new BigQuery({
+	projectId: project_id,
+	credentials: {
+		client_email: client_email,
+		private_key: private_key,
+	},
 });
 
 function sendMessage() {
 	app.client.chat.postMessage({
-		channel: "slack-integration",
+		channel: "internal",
 		text: "This is a test message!",
 	});
 }
@@ -33,3 +35,35 @@ function sendMessage() {
 
 	sendMessage();
 })();
+
+app.message("hello", async ({ message, say }) => {
+	try {
+		await say("Hello there!");
+	} catch (error) {
+		console.log(error);
+	}
+});
+
+function getData() {
+	bigquery.getDatasets(function (err, datasets) {
+		if (err) {
+			console.log("error");
+			console.log({ err });
+		} else {
+			// datasets is an array of Dataset objects.
+			console.log(
+				datasets[0].getTables(function (err, tables) {
+					let result = [];
+
+					for (let key in tables) {
+						result.push(tables[key].id);
+					}
+					console.log(result);
+					// res.send(result);
+				})
+			);
+		}
+	});
+}
+
+getData();
