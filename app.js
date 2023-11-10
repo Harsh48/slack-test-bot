@@ -118,7 +118,7 @@ async function sendCampaignInefficientNotification() {
 		} else {
 			sendMessage(
 				"campaign-inefficient",
-				`All your campains are running efficiently!`
+				`All your campaigns are running efficiently!`
 			);
 		}
 	} catch (error) {
