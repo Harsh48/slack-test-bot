@@ -52,7 +52,7 @@ const sevenDaysAgoFormattedDate = sevenDaysAgo.toISOString();
 async function getDataNew(projectId, datasetId, tableId, startDate) {
 	const query = `
 		SELECT * from \`${projectId}.${datasetId}.${tableId}\`
-		WHERE date > '2023-10-08'
+		WHERE date > '2023-10-01'
 	`;
 
 	const options = {
@@ -71,7 +71,7 @@ async function getDataNew(projectId, datasetId, tableId, startDate) {
 async function getDataKeywordReport(projectId, datasetId, tableId, startDate) {
 	const query = `
 		SELECT * from \`${projectId}.${datasetId}.${tableId}\`
-		WHERE to_date > CAST('2023-10-08' AS DATE)
+		WHERE to_date > CAST('2023-10-01' AS DATE)
 	`;
 
 	const options = {
@@ -114,6 +114,11 @@ async function sendCampaignInefficientNotification() {
 			sendMessage(
 				"campaign-inefficient",
 				`Your following Campaigns are not efficient:\n\n ${campaigns}`
+			);
+		} else {
+			sendMessage(
+				"campaign-inefficient",
+				`All your campains are running efficiently!`
 			);
 		}
 	} catch (error) {
@@ -203,6 +208,8 @@ async function sendNotifications() {
 	await sendHighCpcNotification();
 	await sendLowConversionRateNotification();
 }
+
+// sendNotifications();
 
 cron.schedule(
 	"* * * * *",
