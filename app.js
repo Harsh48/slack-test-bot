@@ -1,6 +1,6 @@
 const { App } = require("@slack/bolt");
 const { BigQuery } = require("@google-cloud/bigquery");
-const { project_id, client_email, private_key } = require("./constants");
+const { PROJECT_ID, CLIENT_EMAIL, PRIVATE_KEY } = require("./constants");
 const cron = require("node-cron");
 
 require("dotenv").config();
@@ -13,10 +13,10 @@ const app = new App({
 });
 
 const bigquery = new BigQuery({
-	projectId: project_id,
+	projectId: PROJECT_ID,
 	credentials: {
-		client_email: client_email,
-		private_key: private_key,
+		client_email: CLIENT_EMAIL,
+		private_key: PRIVATE_KEY,
 	},
 });
 
@@ -47,12 +47,13 @@ const yesterday = new Date(date.setDate(date.getDate() - 1));
 const sevenDaysAgo = new Date(date.setDate(date.getDate() - 7));
 const formattedDate = yesterday.toISOString().split("T")[0];
 
-const sevenDaysAgoFormattedDate = sevenDaysAgo.toISOString();
+const sevenDaysAgoFormattedDate = sevenDaysAgo.toISOString().split("T")[0];
 
 async function getDataNew(projectId, datasetId, tableId, startDate) {
 	const query = `
 		SELECT * from \`${projectId}.${datasetId}.${tableId}\`
-		WHERE date > '2023-10-01'
+		WHERE date > '${startDate}'
+		LIMIT 1000
 	`;
 
 	const options = {
@@ -71,7 +72,8 @@ async function getDataNew(projectId, datasetId, tableId, startDate) {
 async function getDataKeywordReport(projectId, datasetId, tableId, startDate) {
 	const query = `
 		SELECT * from \`${projectId}.${datasetId}.${tableId}\`
-		WHERE to_date > CAST('2023-10-01' AS DATE)
+		WHERE to_date > CAST('${startDate}' AS DATE)
+		LIMIT 1000
 	`;
 
 	const options = {
@@ -97,6 +99,7 @@ async function sendCampaignInefficientNotification() {
 		);
 
 		const inefficientCampaigns = [];
+		// console.log(campaignData);
 
 		for (data of campaignData) {
 			const { ad_spend, direct_revenue, indirect_revenue } = data;
@@ -108,8 +111,10 @@ async function sendCampaignInefficientNotification() {
 			}
 		}
 
+		// console.log(inefficientCampaigns);
+
 		if (inefficientCampaigns.length > 0) {
-			const campaigns = inefficientCampaigns.join(", ");
+			const campaigns = inefficientCampaigns.join("\n");
 
 			sendMessage(
 				"campaign-inefficient",
@@ -118,7 +123,7 @@ async function sendCampaignInefficientNotification() {
 		} else {
 			sendMessage(
 				"campaign-inefficient",
-				`All your campaigns are running efficiently!`
+				`All your campaigns are running as expected!`
 			);
 		}
 	} catch (error) {
@@ -132,7 +137,7 @@ async function sendHighCpcNotification() {
 			"flipkart-390013",
 			"relaxo",
 			"PLA_Consolidated_Daily_Report",
-			formattedDate
+			"2023-10-10"
 		);
 
 		const highCpcCampaigns = [];
@@ -148,7 +153,7 @@ async function sendHighCpcNotification() {
 		}
 
 		if (highCpcCampaigns.length > 0) {
-			const campaigns = highCpcCampaigns.join(", ");
+			const campaigns = highCpcCampaigns.join("\n");
 
 			sendMessage(
 				"high-cpc",
@@ -169,7 +174,7 @@ async function sendLowConversionRateNotification() {
 			"flipkart-390013",
 			"relaxo",
 			"PCA_Keyword_Report",
-			sevenDaysAgoFormattedDate
+			"2023-10-10"
 		);
 
 		const lowConversionRateCampaigns = [];
@@ -189,7 +194,7 @@ async function sendLowConversionRateNotification() {
 		}
 
 		if (lowConversionRateCampaigns.length > 0) {
-			const campaigns = lowConversionRateCampaigns.join(", ");
+			const campaigns = lowConversionRateCampaigns.join("\n");
 
 			sendMessage(
 				"#low-conversion-rate",
@@ -203,13 +208,94 @@ async function sendLowConversionRateNotification() {
 	}
 }
 
+async function sendLowCtrNotification() {
+	try {
+		const campaignData = await getDataKeywordReport(
+			"flipkart-390013",
+			"relaxo",
+			"PLA_Search_Term_Report",
+			"2023-10-10"
+		);
+
+		const lowCtrCampaigns = [];
+		// console.log(campaignData);
+
+		for (data of campaignData) {
+			const { clicks, views } = data;
+			const ctr = (clicks / views) * 100;
+
+			if (ctr < 10) {
+				// low ctr trigger
+				lowCtrCampaigns.push(data.query);
+			}
+		}
+
+		// console.log(lowCtrCampaigns);
+
+		if (lowCtrCampaigns.length > 0) {
+			const campaigns = lowCtrCampaigns.join(",\n");
+
+			sendMessage(
+				"#low-ctr",
+				`Your CTR is dropping for the following search terms:\n\n ${campaigns}`
+			);
+		} else {
+			sendMessage("#low-ctr", "Your campaigns have good CTR");
+		}
+	} catch (error) {
+		console.log(error);
+	}
+}
+
+async function sendLowAcosNotification() {
+	try {
+		const campaignData = await getDataKeywordReport(
+			"flipkart-390013",
+			"relaxo",
+			"PLA_Search_Term_Report",
+			"2023-10-10"
+		);
+
+		const lowAcosCampaigns = [];
+		// console.log(campaignData);
+
+		for (data of campaignData) {
+			const { ad_spend, direct_revenue, indirect_revenue } = data;
+			//(ad spend/(direct revenue+indirect revenue))*100
+			const acos = (ad_spend / (direct_revenue + indirect_revenue)) * 100;
+
+			if (acos < 2) {
+				// low acos trigger
+				lowAcosCampaigns.push(data.query);
+			}
+		}
+
+		// console.log(lowAcosCampaigns);
+
+		if (lowAcosCampaigns.length > 0) {
+			const campaigns = lowAcosCampaigns.join("\n");
+
+			sendMessage(
+				"#low-acos",
+				`Insufficient Spends for the following search terms:\n\n ${campaigns}`
+			);
+		} else {
+			sendMessage("#low-acos", "Your campaigns have good ACoS");
+		}
+	} catch (error) {
+		console.log(error);
+	}
+}
+
 async function sendNotifications() {
 	await sendCampaignInefficientNotification();
 	await sendHighCpcNotification();
 	await sendLowConversionRateNotification();
+	await sendLowCtrNotification();
+	await sendLowAcosNotification();
 }
 
-// sendNotifications();
+sendNotifications();
 
 cron.schedule(
 	"* * * * *",
